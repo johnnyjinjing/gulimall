@@ -1,6 +1,8 @@
 /renren-fast/
 /renren-fast-vue/
 /renren-generator/
+**/logs/
+
 
 **/mvnw
 **/mvnw.cmd
