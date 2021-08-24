@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: gulimall-product
+  cloud:
+    nacos:
+      config:
+        server-addr: localhost:8848
+        namespace: 93e610ac-2c58-41fe-96fd-4a218f5bcbaa
+        extension-configs:
+          - data-id: datasource.yml
+            group: dev
+            refresh: true
+          - data-id: mybatis.yml
+            group: dev
+            refresh: true
+          - data-id: others.yml
+            group: dev
+            refresh: true
+        group: dev
