@@ -7,6 +7,9 @@
       show-checkbox
       node-key="catId"
       :default-expanded-keys="expandedKey"
+      draggable
+      :allow-drop="allowDrop"
+      @node-drop="handleDrop"
     >
       <span class="custom-tree-node" slot-scope="{ node, data }">
         <span>{{ node.label }}</span>
@@ -82,6 +85,8 @@ export default {
       dialogTitle: "",
       dialogVisible: false,
       dialogType: "",
+      maxLevel: 0,
+      updateNodes: [],
       defaultProps: {
         children: "children",
         label: "name",
@@ -89,6 +94,7 @@ export default {
     };
   },
   methods: {
+    // get menu in tree shape
     getMenus() {
       this.$http({
         url: this.$http.adornUrl("/product/category/list/tree"),
@@ -97,6 +103,8 @@ export default {
         this.menus = data.data;
       });
     },
+
+    // add a category
     append(data) {
       this.dialogType = "add";
       this.dialogTitle = "Add Category";
@@ -125,6 +133,8 @@ export default {
         this.expandedKey = [this.category.parentCid];
       });
     },
+
+    // edit a category
     edit(data) {
       this.dialogTitle = "Edit Category";
       this.dialogType = "edit";
@@ -160,6 +170,8 @@ export default {
         this.expandedKey = [this.category.catId];
       });
     },
+
+    // helper function for adding and editing catelog
     submitData() {
       if (this.dialogType == "add") {
         this.addCategory();
@@ -167,6 +179,8 @@ export default {
         this.editCategory();
       }
     },
+
+    // remove a catelog
     remove(node, data) {
       this.$confirm(
         `Are you sure that you want to delete this product: ${data.name}?`,
@@ -192,6 +206,84 @@ export default {
           });
         })
         .catch(() => {});
+    },
+
+    /* drag and drop */
+    // if the (category) node is droppable
+    allowDrop(draggingNode, dropNode, type) {
+      this.maxLevel = 0;
+      this.nodeLevel(draggingNode.data);
+      let depth = this.maxLevel - draggingNode.data.catLevel + 1;
+      return type == "inner"
+        ? depth + dropNode.level <= 3
+        : depth + dropNode.parent.level <= 3;
+    },
+    // compute the total levels of a node (max of `parent + self + children`)
+    nodeLevel(node) {
+      if (node.children != null && node.children.length > 0) {
+        for (let i = 0; i < node.children.length; i++) {
+          if (node.children[i].catLevel > this.maxLevel) {
+            this.maxLevel = node.children[i].catLevel;
+          }
+          this.nodeLevel(node.children[i]);
+        }
+      }
+    },
+    handleDrop(draggingNode, dropNode, dropType, ev) {
+      this.updateNodes = [];
+      console.log("tree drop: ", draggingNode, dropNode, dropType);
+      let parentCid =
+        dropType == "inner"
+          ? dropNode.data.catId
+          : dropNode.parent.data.catId || 0;
+      let siblings =
+        dropType == "inner" ? dropNode.childNodes : dropNode.parent.childNodes;
+
+      for (let i = 0; i < siblings.length; i++) {
+        if (siblings[i].data.catId == draggingNode.data.catId) {
+          // handle the dragging node
+          let level = draggingNode.level;
+          if (siblings[i].level != draggingNode.level) {
+            // dragging node's level changes
+            level = siblings[i].level;
+            // also need to change children's level
+            this.handleDropChildren(siblings[i]);
+          }
+          this.updateNodes.push({
+            catId: siblings[i].data.catId,
+            sort: i,
+            parentCid,
+            catLevel: level,
+          });
+        } else {
+          this.updateNodes.push({ catId: siblings[i].data.catId, sort: i });
+        }
+      }
+      console.log(this.updateNodes);
+      this.$http({
+        url: this.$http.adornUrl("/product/category/updateBatch"),
+        method: "post",
+        data: this.$http.adornData(this.updateNodes, false),
+      }).then(({ data }) => {
+        this.$message({
+          message: `Products are updated`,
+          type: "success",
+        });
+        this.getMenus();
+        this.expandedKey = [parentCid];
+        this.updateNodes = [];
+        this.maxLevel = 0;
+      });
+    },
+    handleDropChildren(node) {
+      for (let i = 0; i < node.childNodes.length; i++) {
+        var currNode = node.childNodes[i].data;
+        this.updateNodes.push({
+          catId: currNode.catId,
+          catLevel: node.childNodes[i].level,
+        });
+        this.handleDropChildren(node.childNodes[i]);
+      }
     },
   },
   computed: {},
